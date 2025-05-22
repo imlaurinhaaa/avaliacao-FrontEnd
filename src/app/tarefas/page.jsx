@@ -2,96 +2,149 @@
 
 import React, { useState, useEffect } from "react";
 import styles from "./Tarefas.module.css";
-import { Pagination } from "antd";
+import { Pagination, Card, Modal, Skeleton } from "antd";
 import axios from "axios";
-import Card from "@/components/Card";
-import Header from "@/components/Header";
-import Loader from "@/components/Loader";
+import Header from "../../components/Header";
 import Image from "next/image";
 
-export default function tarefasScreen() {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(10);
-    const [tarefas, setTarefas] = useState([]);
-    const [selectedTarefa, setSelectedTarefa] = useState("");
-    const [allTarefas, setAllTarefas] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [modalInfo, setModalInfo] = useState({ visible: false, tarefa: null, loading: false });
 
-    const fetchTarefas = async () => {
-        setLoading(true);
-        try {
-            const url = "https://localhost:3000/api/tarefas";
-            const response = await axios.get(url);
-            setTarefas(response.data);
-            if (response.data.length > 0) {
-                setAllTarefas(response.data);
-            }
-        } catch (error) {
-            console.error("Error fetching tarefas:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+const HEADERS = {
+    "x-api-key": process.env.NEXT_PUBLIC_API_KEY || "",
+}
+
+export default function Tarefas() {
+    const [data, setData] = useState({
+        tarefas: [],
+        loading: true,
+        current: 1,
+        pageSize: 5,
+    });
+
+    const [modalInfo, setModalInfo] = useState({
+        visible: false,
+        tarefa: null,
+    });
 
     useEffect(() => {
+        const fetchTarefas = async () => {
+            try {
+                const { data: tarefas } = await axios.get(
+                    `${process.env.NEXT_PUBLIC_API_URL}/tarefas`,
+                    { headers: HEADERS }
+                );
+                setData((prev) => ({ ...prev, tarefas, loading: false }));
+            } catch (error) {
+                setData((prev) => ({ ...prev, loading: false }));
+            }
+        };
+
         fetchTarefas();
     }, []);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, []);
-
-    const openModal = async (tarefa) => {
-        setModalInfo({ visible: true, tarefa, loading: true });
-        try {
-            const url = `http://localhost:3000/api/tarefas/${tarefa.id}`;
-            const response = await axios.get(url);
-            setSelectedTarefa(response.data);
-        } catch (error) {
-            console.error("Error fetching tarefa details:", error);
-        } finally {
-            setModalInfo((prev) => ({ ...prev, loading: false }));
-        }
+    const openModal = (tarefa) => {
+        setModalInfo({
+            visible: true,
+            tarefa,
+        });
     };
 
-    if (loading) {
-        return <Loader />;
-    }
+    const closeModal = () => {
+        setModalInfo({
+            visible: false,
+            tarefa: null,
+        });
+    };
 
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentTarefas = tarefas.slice(indexOfFirstItem, indexOfLastItem);
+    const paginatedTarefas = () => {
+        const start = (data.current - 1) * data.pageSize;
+        return data.tarefas.slice(start, start + data.pageSize)
+    };
+
 
     return (
         <div className={styles.container}>
             <Header />
             <Pagination
-                current={currentPage}
-                total={tarefas.length}
-                pageSize={itemsPerPage}
-                onChange={(page) => setCurrentPage(page)}
-                showSizeChanger={false}
-                style={{ marginTop: "20px" }}
+                current={data.current}
+                pageSize={data.pageSize}
+                total={data.tarefas.length}
+                onChange={(page, size) =>
+                    setData((prev) => ({ ...prev, current: page, pageSize: size }))
+                }
+                showSizeChanger
+                pageSizeOptions={["5", "10", "100"]}
+                className={styles.pagination}
             />
 
-            <div className={styles.cardContainer}>
-                {loading ? (
-                    <Loader />
-                ) : (
-                    currentTarefas.map((tarefa, index) => (
+            {data.loading ? (
+                <Image
+                    src="/image/loading.gif"
+                    alt="Loading"
+                    width={300}
+                    height={200}
+                    className={styles.loading}
+                />
+            ) : (
+                <div className={styles.cardContainer}>
+                    {paginatedTarefas().map((tarefa) => (
                         <Card
-                            key={index}
-                            tarefa={tarefa}
-                            onClick={() => setSelectedTarefa(tarefa)}
-                            onCardClick={handleCardClick}
-                        />
-                    ))
+                            key={tarefa.id}
+                            className={styles.card}
+                            hoverable
+                            onClick={() => {
+                                openModal(tarefa);
+                            }}
+                            style={{ width: 220, margin: "10px" }}
+                            cover={
+                                <Image
+                                    alt={tarefa.name}
+                                    src={
+                                        tarefa.photo ? tarefa.photo : "/img/220.svg"
+                                    }
+                                    width={220}
+                                    height={220}
+                                />
+                            }
+                        >
+                            <Card.Meta
+                                title={tarefa.name}
+                                description={
+                                    <p>
+                                        <strong>Categoria:</strong> {tarefa.category_name || "N/A"}
+                                    </p>
+                                }
+                            />
+                        </Card>
+                    ))}
+                </div>
+            )}
+
+            <Modal
+                title={`Detalhes da Tarefa`}
+                open={modalInfo.visible}
+                onCancel={closeModal}
+                onOk={closeModal}
+                width={600}
+            >
+                {modalInfo.tarefa ? (
+                    <div className={styles.categorysInfo}>
+                        <p>
+                            <span className={styles.label}>Nome:</span> {modalInfo.tarefa.name}
+                        </p>
+                        <p>
+                            <span className={styles.label}>Projeto</span>{modalInfo.tarefa.projeto_id}
+                        </p>
+                        <p>
+                            <span className={styles.label}>Status da Tarefa</span>{modalInfo.tarefa.status_tarefa}
+                        </p>
+                        <p>
+                            <span className={styles.label}>Descrição</span>{modalInfo.tarefa.description}
+                        </p>
+                    </div>
+                ) : (
+                    <Skeleton active />
                 )}
-            </div>
+            </Modal>
         </div>
     );
 }
