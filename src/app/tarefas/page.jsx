@@ -5,24 +5,25 @@ import styles from "./Tarefas.module.css";
 import { Pagination, Card, Modal, Skeleton } from "antd";
 import axios from "axios";
 import Header from "../../components/Header";
+import Loader from "../../components/Loader";
 import Image from "next/image";
 
 
-const HEADERS = {
-    "x-api-key": process.env.NEXT_PUBLIC_API_KEY || "",
-}
+const HEADERS = { "x-api-key": process.env.NEXT_PUBLIC_API_KEY };
 
 export default function Tarefas() {
     const [data, setData] = useState({
         tarefas: [],
         loading: true,
         current: 1,
-        pageSize: 5,
+        pageSize: 0,
     });
 
     const [modalInfo, setModalInfo] = useState({
         visible: false,
         tarefa: null,
+        projeto: null,
+        loading: false,
     });
 
     useEffect(() => {
@@ -32,28 +33,15 @@ export default function Tarefas() {
                     `${process.env.NEXT_PUBLIC_API_URL}/tarefas`,
                     { headers: HEADERS }
                 );
-                setData((prev) => ({ ...prev, tarefas, loading: false }));
-            } catch (error) {
-                setData((prev) => ({ ...prev, loading: false }));
+                setData({ tarefas, loading: false, current: 1, pageSize: 5 });
+            } catch {
+                setData((d) => ({ ...d, loading: false }));
             }
         };
 
         fetchTarefas();
     }, []);
 
-    const openModal = (tarefa) => {
-        setModalInfo({
-            visible: true,
-            tarefa,
-        });
-    };
-
-    const closeModal = () => {
-        setModalInfo({
-            visible: false,
-            tarefa: null,
-        });
-    };
 
     const paginatedTarefas = () => {
         const start = (data.current - 1) * data.pageSize;
@@ -69,38 +57,27 @@ export default function Tarefas() {
                 pageSize={data.pageSize}
                 total={data.tarefas.length}
                 onChange={(page, size) =>
-                    setData((prev) => ({ ...prev, current: page, pageSize: size }))
+                    setData((d) => ({ ...d, current: page, pageSize: size }))
                 }
                 showSizeChanger
                 pageSizeOptions={["5", "10", "100"]}
                 className={styles.pagination}
             />
-
             {data.loading ? (
-                <Image
-                    src="/image/loading.gif"
-                    alt="Loading"
-                    width={300}
-                    height={200}
-                    className={styles.loading}
-                />
+                <div className={`${styles.loading} ${data.loading ? "" : styles.hidden}`}>
+                    <Loader />
+                </div>
             ) : (
-                <div className={styles.cardContainer}>
+                <div className={styles.cardsContainer}>
                     {paginatedTarefas().map((tarefa) => (
                         <Card
                             key={tarefa.id}
                             className={styles.card}
                             hoverable
-                            onClick={() => {
-                                openModal(tarefa);
-                            }}
-                            style={{ width: 220, margin: "10px" }}
                             cover={
                                 <Image
                                     alt={tarefa.name}
-                                    src={
-                                        tarefa.photo ? tarefa.photo : "/img/220.svg"
-                                    }
+                                    src={tarefa.photo?.startsWith("http") || tarefa.photo?.startsWith("/images") ? tarefa.photo : "/images/220.svg"}
                                     width={220}
                                     height={220}
                                 />
@@ -108,11 +85,6 @@ export default function Tarefas() {
                         >
                             <Card.Meta
                                 title={tarefa.name}
-                                description={
-                                    <p>
-                                        <strong>Categoria:</strong> {tarefa.category_name || "N/A"}
-                                    </p>
-                                }
                             />
                         </Card>
                     ))}
@@ -120,30 +92,24 @@ export default function Tarefas() {
             )}
 
             <Modal
-                title={`Detalhes da Tarefa`}
+                title={modalInfo.tarefa?.name}
                 open={modalInfo.visible}
-                onCancel={closeModal}
-                onOk={closeModal}
-                width={600}
-            >
-                {modalInfo.tarefa ? (
-                    <div className={styles.categorysInfo}>
-                        <p>
-                            <span className={styles.label}>Nome:</span> {modalInfo.tarefa.name}
-                        </p>
-                        <p>
-                            <span className={styles.label}>Projeto</span>{modalInfo.tarefa.projeto_id}
-                        </p>
-                        <p>
-                            <span className={styles.label}>Status da Tarefa</span>{modalInfo.tarefa.status_tarefa}
-                        </p>
-                        <p>
-                            <span className={styles.label}>Descrição</span>{modalInfo.tarefa.description}
-                        </p>
-                    </div>
-                ) : (
-                    <Skeleton active />
-                )}
+                onCancel={() => setModalInfo({
+                    visible: false,
+                    tarefa: null,
+                    projeto: null,
+                    loading: false,
+                })
+            }
+            onOk={() => 
+                setModalInfo({
+                    visible: false,
+                    tarefa: null,
+                    projeto: null,
+                    loading: false,
+                })
+            }
+            > 
             </Modal>
         </div>
     );
